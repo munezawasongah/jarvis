@@ -38,7 +38,7 @@ class BridgeService : Service() {
             ctx.stopService(Intent(ctx, BridgeService::class.java))
         }
 
-        private fun setStatus(s: String) {
+        private fun updateStatus(s: String) {
             status = s
             listener?.invoke(s)
         }
@@ -75,7 +75,7 @@ class BridgeService : Service() {
         socket?.close(1000, "service stopped")
         socket = null
         pool.shutdownNow()
-        setStatus("Stopped")
+        updateStatus("Stopped")
         super.onDestroy()
     }
 
@@ -110,20 +110,20 @@ class BridgeService : Service() {
         if (stopped) return
         val url = wsUrl()
         if (url == null) {
-            setStatus("Enter the server address and token first")
+            updateStatus("Enter the server address and token first")
             stopSelf()
             return
         }
-        setStatus(if (retry == 0) "Connecting…" else "Reconnecting (attempt ${retry + 1})…")
+        updateStatus(if (retry == 0) "Connecting…" else "Reconnecting (attempt ${retry + 1})…")
         val request = try { Request.Builder().url(url).build() } catch (e: IllegalArgumentException) {
-            setStatus("The server address is not valid")
+            updateStatus("The server address is not valid")
             stopSelf()
             return
         }
         val me = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 retry = 0
-                setStatus("Connected")
+                updateStatus("Connected")
                 val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
                 webSocket.send(
                     JSONObject().put("type", "hello")
@@ -152,7 +152,7 @@ class BridgeService : Service() {
         if (stopped) return
         retry++
         val delay = minOf(30_000L, 1000L shl minOf(retry, 5))
-        setStatus("$why. Retrying in ${delay / 1000}s…")
+        updateStatus("$why. Retrying in ${delay / 1000}s…")
         handler.postDelayed({ if (socket == null) connect() }, delay)
     }
 
