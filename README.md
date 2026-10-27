@@ -28,8 +28,7 @@ npm start
 It prints the access token (also in `data/token.txt`). Open http://localhost:3000 on the same machine,
 tap Start, paste the token.
 
-**Which AI?** Jarvis works with Google Gemini (free tier, key from https://aistudio.google.com/apikey) or Anthropic Claude (paid).
-Set `GEMINI_API_KEY` to start free. To switch later, add `ANTHROPIC_API_KEY` and set `JARVIS_PROVIDER=anthropic`. Nothing else changes.
+**Which AI?** Set one API key and Jarvis uses it: `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `CEREBRAS_API_KEY` (all have free tiers) or `ANTHROPIC_API_KEY` (paid, best). With several keys set, choose with `JARVIS_PROVIDER`. Override the model with `JARVIS_MODEL`.
 
 ## 2. Reach it from your Fold 5
 

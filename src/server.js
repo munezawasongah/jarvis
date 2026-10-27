@@ -3,9 +3,8 @@ import { createServer } from './app.js';
 import { tools } from './tools/index.js';
 import { googleReady } from './google.js';
 
-const keyName = config.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
-if (!process.env[keyName]) {
-  console.warn(`! ${keyName} is not set. Jarvis cannot think until you add it to .env.`);
+if (!process.env[config.keyEnv]) {
+  console.warn(`! ${config.keyEnv} is not set. Jarvis cannot think until you add it to .env.`);
 }
 
 const jarvis = createServer();

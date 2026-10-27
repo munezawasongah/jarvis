@@ -17,9 +17,7 @@ const tokenOk = (t) => crypto.timingSafeEqual(digest(t), digest(config.token));
 export function friendlyError(err) {
   const msg = String(err?.message || '');
   if (err?.status === 401 || /authentication|api key|auth token/i.test(msg)) {
-    return config.provider === 'gemini'
-      ? 'The Gemini API key is missing or invalid. Set GEMINI_API_KEY on the server.'
-      : 'The Anthropic API key is missing or invalid. Set ANTHROPIC_API_KEY on the server.';
+    return `The ${config.provider} API key is missing or invalid. Set ${config.keyEnv} on the server.`;
   }
   if (err?.status === 429) return 'The AI service is rate limited right now. Try again in a moment.';
   if (err?.status >= 500) return `The AI service is having trouble (${err.status}): ${msg.slice(0, 300)}`;

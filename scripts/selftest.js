@@ -336,6 +336,53 @@ await test('gemini adapter: bad key surfaces as 401', async () => {
   await assert.rejects(() => gem.messages.create({ model: 'm', max_tokens: 1, system: 's', messages: [{ role: 'user', content: 'x' }] }), (e) => e.status === 401);
 });
 
+await test('openai-compatible adapter: converts messages, tools and responses', async () => {
+  const { createOpenAIClient } = await import('../src/openai.js');
+  let sent, url, auth;
+  const cl = createOpenAIClient({
+    apiKey: 'gk', baseUrl: 'https://example.test/v1/',
+    fetchImpl: async (u, init) => { url = u; auth = init.headers.authorization; sent = JSON.parse(init.body);
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'On it.', tool_calls: [{ id: 'c9', type: 'function', function: { name: 'remember', arguments: '{"key":"a","value":"b"}' } }] } }] }) }; },
+  });
+  const res = await cl.messages.create({
+    model: 'm', max_tokens: 50, system: 'sys',
+    tools: [{ name: 'remember', description: 'd', input_schema: { type: 'object', properties: { key: { type: 'string' } } } }],
+    messages: [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 't1', name: 'remember', input: { key: 'k' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'OK' }] },
+    ],
+  });
+  assert.equal(url, 'https://example.test/v1/chat/completions');
+  assert.equal(auth, 'Bearer gk');
+  assert.equal(sent.messages[0].role, 'system');
+  assert.equal(sent.messages[2].tool_calls[0].function.arguments, '{"key":"k"}');
+  assert.deepEqual(sent.messages[3], { role: 'tool', tool_call_id: 't1', content: 'OK' });
+  assert.equal(sent.tools[0].function.name, 'remember');
+  assert.equal(res.stop_reason, 'tool_use');
+  assert.equal(res.content[1].input.value, 'b');
+});
+
+await test('503 "high demand" is retried, then succeeds', async () => {
+  const { createOpenAIClient } = await import('../src/openai.js');
+  let n = 0;
+  const cl = createOpenAIClient({ apiKey: 'k', baseUrl: 'https://x.test', retry: { delayMs: 1 },
+    fetchImpl: async () => (++n < 3 ? { ok: false, status: 503, json: async () => ({ error: { message: 'busy' } }) }
+      : { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'hi' } }] }) }) });
+  const res = await cl.messages.create({ model: 'm', max_tokens: 1, system: 's', messages: [{ role: 'user', content: 'x' }] });
+  assert.equal(n, 3);
+  assert.equal(res.content[0].text, 'hi');
+});
+
+await test('provider is picked from whichever API key is set', async () => {
+  const { pickProvider } = await import('../src/providers.js');
+  assert.equal(pickProvider({ GROQ_API_KEY: 'x' }).name, 'groq');
+  assert.equal(pickProvider({ GEMINI_API_KEY: 'x', GROQ_API_KEY: 'y' }).name, 'gemini');
+  assert.equal(pickProvider({ GEMINI_API_KEY: 'x', GROQ_API_KEY: 'y', JARVIS_PROVIDER: 'groq' }).name, 'groq');
+  assert.equal(pickProvider({ GROQ_API_KEY: 'x', JARVIS_MODEL: 'zz' }).model, 'zz');
+  assert.equal(pickProvider({}).name, 'anthropic');
+});
+
 ui2.close();
 await jarvis.close();
 fs.rmSync(tmp, { recursive: true, force: true });

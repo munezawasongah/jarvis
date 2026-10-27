@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { pickProvider } from './providers.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = process.env.JARVIS_DATA_DIR || path.join(root, 'data');
@@ -19,6 +20,7 @@ function loadToken() {
   return token;
 }
 
+const provider = pickProvider();
 const list = (v) => (v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 export const config = {
@@ -27,16 +29,11 @@ export const config = {
   publicDir: path.join(root, 'public'),
   port: Number(process.env.PORT || 3000),
   token: loadToken(),
-  // Which AI brain to use: 'gemini' (free tier) or 'anthropic'. Auto-picks Gemini if only GEMINI_API_KEY is set.
-  provider: (
-    process.env.JARVIS_PROVIDER ||
-    (process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY ? 'gemini' : 'anthropic')
-  ).toLowerCase(),
-  model:
-    process.env.JARVIS_MODEL ||
-    ((process.env.JARVIS_PROVIDER || (process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY ? 'gemini' : '')) === 'gemini'
-      ? 'gemini-2.5-flash'
-      : 'claude-sonnet-5-5'),
+  // Which AI brain: see providers.js. Set JARVIS_PROVIDER, or it picks whichever API key you set.
+  provider: provider.name,
+  keyEnv: provider.keyEnv,
+  baseUrl: provider.baseUrl,
+  model: provider.model,
   userName: process.env.USER_NAME || 'Diego',
   tz: process.env.TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
   maxSteps: Number(process.env.MAX_STEPS || 12),

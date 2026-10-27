@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
 import { createGeminiClient } from './gemini.js';
+import { createOpenAIClient } from './openai.js';
 import { db } from './db.js';
 import { nowString } from './time.js';
 import { toolDefs, getTool, needsConfirmation } from './tools/index.js';
@@ -9,8 +10,11 @@ import { phoneConnected } from './phoneBridge.js';
 
 let defaultClient;
 export function getClient() {
-  // Anthropic reads ANTHROPIC_API_KEY from the environment; Gemini reads GEMINI_API_KEY.
-  defaultClient ??= config.provider === 'gemini' ? createGeminiClient() : new Anthropic();
+  if (!defaultClient) {
+    if (config.provider === 'anthropic') defaultClient = new Anthropic(); // reads ANTHROPIC_API_KEY
+    else if (config.provider === 'gemini') defaultClient = createGeminiClient();
+    else defaultClient = createOpenAIClient({ apiKey: process.env[config.keyEnv], baseUrl: config.baseUrl, label: config.provider });
+  }
   return defaultClient;
 }
 

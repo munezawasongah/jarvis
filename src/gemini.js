@@ -2,6 +2,8 @@
 // (client.messages.create) but talks to Google's Gemini REST API. No extra dependency.
 // History stays in Anthropic format; it is converted on every call.
 
+import { fetchWithRetry } from './retry.js';
+
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 const KEEP = new Set(['type', 'description', 'properties', 'items', 'enum', 'required', 'nullable']);
@@ -88,7 +90,7 @@ export function fromGeminiResponse(data) {
   return { content, stop_reason: hasCall ? 'tool_use' : 'end_turn' };
 }
 
-export function createGeminiClient({ apiKey = process.env.GEMINI_API_KEY, fetchImpl = fetch } = {}) {
+export function createGeminiClient({ apiKey = process.env.GEMINI_API_KEY, fetchImpl = fetch, retry } = {}) {
   return {
     messages: {
       async create({ model, max_tokens, system, tools, messages }) {
@@ -102,11 +104,15 @@ export function createGeminiClient({ apiKey = process.env.GEMINI_API_KEY, fetchI
         };
         if (tools?.length) body.tools = toGeminiTools(tools);
 
-        const res = await fetchImpl(`${BASE}/${model}:generateContent`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-          body: JSON.stringify(body),
-        });
+        const res = await fetchWithRetry(
+          () =>
+            fetchImpl(`${BASE}/${model}:generateContent`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+              body: JSON.stringify(body),
+            }),
+          retry,
+        );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           const msg = data?.error?.message || `Gemini error ${res.status}`;
