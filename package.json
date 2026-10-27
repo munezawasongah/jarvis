@@ -1,0 +1,24 @@
+{
+  "name": "jarvis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal voice assistant: Claude brain, voice client, Google email/calendar, phone and laptop control",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "auth:google": "node scripts/google-auth.js",
+    "icons": "node scripts/make-icons.js",
+    "test": "node scripts/selftest.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "googleapis": "^188.0.0",
+    "ws": "^8.22.0"
+  }
+}

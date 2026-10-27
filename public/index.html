@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070b12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Jarvis</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="start" class="overlay">
+    <div class="start-card">
+      <div class="orb idle big" aria-hidden="true"></div>
+      <h1>JARVIS</h1>
+      <p>Tap to start. Your browser will ask for microphone access so I can hear you.</p>
+      <p id="secureWarn" class="warn" hidden>This page is not on HTTPS, so the browser will block the microphone. Open it via localhost or an HTTPS link (see README).</p>
+      <button id="startBtn" class="primary">Start</button>
+    </div>
+  </div>
+
+  <header>
+    <div class="brand">JARVIS</div>
+    <div class="chips">
+      <span class="chip" id="connChip" title="Server connection"><i class="dot"></i>Server</span>
+      <span class="chip" id="phoneChip" title="Android companion app"><i class="dot"></i>Phone</span>
+    </div>
+    <div class="actions">
+      <button id="wakeBtn" class="icon" aria-pressed="true" title="Always listening for “Jarvis”">Wake</button>
+      <button id="settingsBtn" class="icon" title="Settings" aria-label="Settings">&#9881;</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stage">
+      <button id="orbBtn" class="orb idle" aria-label="Tap to interrupt or speak"></button>
+      <div id="statusLine" class="status" role="status" aria-live="polite">Say “Jarvis” or tap the mic</div>
+    </div>
+    <div id="log" class="log" aria-live="polite"></div>
+  </main>
+
+  <footer>
+    <form id="form" autocomplete="off">
+      <input id="input" type="text" placeholder="Type to Jarvis…" enterkeyhint="send" aria-label="Message">
+      <button id="micBtn" type="button" class="mic" aria-label="Speak">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>
+      </button>
+      <button id="sendBtn" type="submit" class="primary">Send</button>
+    </form>
+  </footer>
+
+  <div id="confirm" class="sheet" hidden role="alertdialog" aria-labelledby="cLabel">
+    <div class="sheet-card">
+      <div class="sheet-tag" id="cLabel"></div>
+      <div class="sheet-summary" id="cSummary"></div>
+      <dl id="cDetails"></dl>
+      <div class="sheet-actions">
+        <button id="denyBtn" class="deny">Deny</button>
+        <button id="approveBtn" class="approve">Approve</button>
+      </div>
+      <div class="hint">You can also say “yes” or “no”.</div>
+    </div>
+  </div>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings">
+      <h2>Settings</h2>
+      <label>Speech language
+        <input id="lang" list="langs" placeholder="en-US">
+        <datalist id="langs"><option value="en-US"><option value="en-GB"><option value="sw-TZ"><option value="sw-KE"><option value="fr-FR"><option value="es-ES"><option value="de-DE"></datalist>
+      </label>
+      <label>Voice
+        <select id="voice"></select>
+      </label>
+      <label>Speed <output id="rateOut"></output>
+        <input id="rate" type="range" min="0.7" max="1.5" step="0.05">
+      </label>
+      <label class="check"><input id="wakeChk" type="checkbox"> Always listen for “Jarvis” (keeps the screen on)</label>
+      <label class="check"><input id="speakChk" type="checkbox"> Speak replies aloud</label>
+      <div class="row">
+        <button type="button" id="tokenBtn">Change access token</button>
+        <button type="button" id="clearBtn">Clear conversation</button>
+        <button type="button" id="installBtn" hidden>Install app</button>
+      </div>
+      <div class="row"><button value="close" class="primary">Done</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="tokenDlg">
+    <form method="dialog" class="settings" id="tokenForm">
+      <h2>Access token</h2>
+      <p class="muted">Paste the token from your Jarvis server (JARVIS_TOKEN or data/token.txt).</p>
+      <input id="tokenInput" type="password" autocomplete="off" placeholder="Access token" required>
+      <div class="row"><button value="save" class="primary">Save</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

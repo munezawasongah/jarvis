@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Jarvis Companion</string>
+    <string name="a11y_description">Lets your own Jarvis assistant read what is on screen, tap buttons and type text when you ask it to operate this phone. Nothing is sent anywhere except to the Jarvis server you configured.</string>
+</resources>
