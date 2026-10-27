@@ -296,6 +296,46 @@ await test('remember() feeds the next system prompt', async () => {
   assert.match(fake.seen.at(-1).system, /meeting preference: after 10am/);
 });
 
+await test('gemini adapter: converts tools, history and responses', async () => {
+  const { createGeminiClient } = await import('../src/gemini.js');
+  let sent;
+  const gem = createGeminiClient({
+    apiKey: 'k',
+    fetchImpl: async (url, init) => {
+      sent = JSON.parse(init.body);
+      assert.match(url, /gemini-test:generateContent/);
+      assert.equal(init.headers['x-goog-api-key'], 'k');
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [
+        { text: 'Checking.' }, { functionCall: { name: 'remember', args: { key: 'a', value: 'b' } }, thoughtSignature: 'SIG' } ] } }] }) };
+    },
+  });
+  const res = await gem.messages.create({
+    model: 'gemini-test', max_tokens: 100, system: 'sys',
+    tools: [{ name: 'remember', description: 'd', input_schema: { type: 'object', additionalProperties: false, properties: { key: { type: 'string', default: 'x' } }, required: ['key'] } },
+            { name: 'noargs', description: 'd', input_schema: { type: 'object', properties: {} } }],
+    messages: [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'remember', input: { key: 'k' }, _sig: 'S0' }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'OK' }] },
+    ],
+  });
+  const decl = sent.tools[0].functionDeclarations;
+  assert.equal(decl[0].parameters.additionalProperties, undefined);
+  assert.equal(decl[0].parameters.properties.key.default, undefined);
+  assert.equal(decl[1].parameters, undefined);
+  assert.equal(sent.contents[1].parts[0].thoughtSignature, 'S0');
+  assert.equal(sent.contents[2].parts[0].functionResponse.name, 'remember');
+  assert.equal(res.stop_reason, 'tool_use');
+  assert.equal(res.content[1].input.key, 'a');
+  assert.equal(res.content[1]._sig, 'SIG');
+});
+
+await test('gemini adapter: bad key surfaces as 401', async () => {
+  const { createGeminiClient } = await import('../src/gemini.js');
+  const gem = createGeminiClient({ apiKey: 'bad', fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({ error: { message: 'API key not valid.' } }) }) });
+  await assert.rejects(() => gem.messages.create({ model: 'm', max_tokens: 1, system: 's', messages: [{ role: 'user', content: 'x' }] }), (e) => e.status === 401);
+});
+
 ui2.close();
 await jarvis.close();
 fs.rmSync(tmp, { recursive: true, force: true });

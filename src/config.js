@@ -27,7 +27,16 @@ export const config = {
   publicDir: path.join(root, 'public'),
   port: Number(process.env.PORT || 3000),
   token: loadToken(),
-  model: process.env.JARVIS_MODEL || 'claude-sonnet-5-5',
+  // Which AI brain to use: 'gemini' (free tier) or 'anthropic'. Auto-picks Gemini if only GEMINI_API_KEY is set.
+  provider: (
+    process.env.JARVIS_PROVIDER ||
+    (process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY ? 'gemini' : 'anthropic')
+  ).toLowerCase(),
+  model:
+    process.env.JARVIS_MODEL ||
+    ((process.env.JARVIS_PROVIDER || (process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY ? 'gemini' : '')) === 'gemini'
+      ? 'gemini-2.5-flash'
+      : 'claude-sonnet-5-5'),
   userName: process.env.USER_NAME || 'Diego',
   tz: process.env.TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
   maxSteps: Number(process.env.MAX_STEPS || 12),

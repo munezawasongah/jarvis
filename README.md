@@ -21,12 +21,15 @@ as untrusted data, never as instructions.
 ```bash
 cd jarvis
 npm install
-cp .env.example .env      # add ANTHROPIC_API_KEY
+cp .env.example .env      # add GEMINI_API_KEY (free) or ANTHROPIC_API_KEY
 npm test                  # optional: 15 self tests, no API key needed
 npm start
 ```
 It prints the access token (also in `data/token.txt`). Open http://localhost:3000 on the same machine,
 tap Start, paste the token.
+
+**Which AI?** Jarvis works with Google Gemini (free tier, key from https://aistudio.google.com/apikey) or Anthropic Claude (paid).
+Set `GEMINI_API_KEY` to start free. To switch later, add `ANTHROPIC_API_KEY` and set `JARVIS_PROVIDER=anthropic`. Nothing else changes.
 
 ## 2. Reach it from your Fold 5
 
