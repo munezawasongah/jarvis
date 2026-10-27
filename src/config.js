@@ -27,7 +27,13 @@ export const config = {
   publicDir: path.join(root, 'public'),
   port: Number(process.env.PORT || 3000),
   token: loadToken(),
-  model: process.env.JARVIS_MODEL || 'claude-sonnet-5-5',
+  model: process.env.JARVIS_MODEL || 'llama-3.3-70b-versatile',
+  // Any OpenAI-compatible chat API. Defaults to Groq.
+  llm: {
+    apiKey: process.env.LLM_API_KEY || process.env.GROQ_API_KEY || '',
+    baseUrl: (process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/+$/, ''),
+  },
+  tavilyKey: process.env.TAVILY_API_KEY || '',
   userName: process.env.USER_NAME || 'Diego',
   tz: process.env.TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
   maxSteps: Number(process.env.MAX_STEPS || 12),
@@ -42,8 +48,6 @@ export const config = {
   },
   // Public HTTPS address of this server (used for the Google sign-in redirect). Railway sets RAILWAY_PUBLIC_DOMAIN.
   publicUrl: (process.env.PUBLIC_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '')).replace(/\/+$/, ''),
-  // Anthropic's server-side web search (set WEB_SEARCH=0 to turn off).
-  webSearch: process.env.WEB_SEARCH !== '0',
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   // Laptop tools run on whichever machine runs this server. Set to 0 to disable them.
   laptopEnabled: process.env.LAPTOP_TOOLS !== '0',

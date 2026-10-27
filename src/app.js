@@ -16,11 +16,11 @@ const tokenOk = (t) => crypto.timingSafeEqual(digest(t), digest(config.token));
 
 export function friendlyError(err) {
   const msg = String(err?.message || '');
-  if (err?.status === 401 || /authentication|api key|auth token/i.test(msg)) {
-    return 'The Anthropic API key is missing or invalid. Set ANTHROPIC_API_KEY on the server.';
-  }
-  if (err?.status === 429) return 'The AI service is rate limited right now. Try again in a moment.';
+  if (err?.status === 401 || err?.status === 403) return 'The AI service rejected the API key. Check GROQ_API_KEY on the server.';
+  if (err?.status === 429) return 'The AI service is rate limited right now (free plans have per-minute limits). Try again in a moment.';
+  if (err?.status === 413) return 'That request was too large for the AI service. Clear the conversation in Settings and try again.';
   if (err?.status >= 500) return 'The AI service is having trouble. Try again shortly.';
+  if (err?.name === 'TimeoutError') return 'The AI service took too long to answer. Try again.';
   return msg || 'Something went wrong.';
 }
 

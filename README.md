@@ -1,6 +1,6 @@
 # Jarvis
 
-Your own voice assistant. Claude is the brain; it calls tools to read and send email, manage your
+Your own voice assistant. An LLM (Groq by default) is the brain; it calls tools to read and send email, manage your
 calendar, text people, keep tasks and reminders, and operate your Android phone and laptop.
 
 ```
@@ -21,8 +21,8 @@ as untrusted data, never as instructions.
 ```bash
 cd jarvis
 npm install
-cp .env.example .env      # add ANTHROPIC_API_KEY
-npm test                  # optional: 15 self tests, no API key needed
+cp .env.example .env      # add GROQ_API_KEY
+npm test                  # optional: self tests, no API key needed
 npm start
 ```
 It prints the access token (also in `data/token.txt`). Open http://localhost:3000 on the same machine,
@@ -87,7 +87,8 @@ have started the bot; save their chat id with "save Amina's telegram chat id 123
 ## Notes and limits
 
 - Speech recognition uses Chrome's built-in service (audio goes to Google). Wake word detection is "listen for the word in continuous transcription", so it needs the tab/app open and the screen on. A fully offline wake word (Porcupine) is a good next step.
-- Web: `web_search` uses Anthropic's server-side search (turn off with `WEB_SEARCH=0`); `web_fetch` reads a page and refuses private/internal addresses.
+- Web: `web_search` uses Tavily if `TAVILY_API_KEY` is set (recommended), otherwise a free scraper that datacenter IPs may get blocked on; `web_fetch` reads a page and refuses private/internal addresses.
+- Groq free plans have per-minute token limits; Jarvis waits and retries on rate limits, but heavy multi-step requests can still be slow.
 - iPhone is not supported (Apple blocks this level of control).
 - `laptop_run` always asks first and shows the exact command. Never put it in `AUTO_APPROVE` on a server exposed to the internet.
 - The token is the key to everything. Keep it private; use HTTPS.
@@ -95,7 +96,7 @@ have started the bot; save their chat id with "save Amina's telegram chat id 123
 ## Deploy on Railway
 
 1. Push this repo to GitHub, then Railway > New Project > Deploy from GitHub repo.
-2. Variables: `ANTHROPIC_API_KEY`, `JARVIS_TOKEN` (a long random string), `TIMEZONE`, `USER_NAME`, `LAPTOP_TOOLS=0`,
+2. Variables: `GROQ_API_KEY`, `JARVIS_TOKEN` (a long random string), `TIMEZONE`, `USER_NAME`, `LAPTOP_TOOLS=0`,
    `JARVIS_DATA_DIR=/data`, plus `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `TELEGRAM_BOT_TOKEN` if used.
 3. Add a Volume mounted at `/data` so memory, tasks and the Google login survive redeploys.
 4. Settings > Networking > Generate Domain. That HTTPS address is what you open on the Fold and enter in the Android app.

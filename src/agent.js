@@ -1,16 +1,22 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
 import { db } from './db.js';
 import { nowString } from './time.js';
 import { toolDefs, getTool, needsConfirmation } from './tools/index.js';
 import { requestConfirmation } from './confirm.js';
 import { phoneConnected } from './phoneBridge.js';
+import { realClient } from './llm.js';
 
 let defaultClient;
 export function getClient() {
-  defaultClient ??= new Anthropic(); // reads ANTHROPIC_API_KEY from the environment
+  defaultClient ??= realClient();
   return defaultClient;
 }
+
+// Tool definitions in OpenAI/Groq function-calling format.
+const apiTools = toolDefs.map((t) => ({
+  type: 'function',
+  function: { name: t.name, description: t.description, parameters: t.input_schema },
+}));
 
 function buildSystem() {
   const facts = Object.entries(db.memory)
@@ -19,7 +25,7 @@ function buildSystem() {
     .slice(0, 4000);
 
   return `You are Jarvis, the personal assistant, secretary and daily organiser of ${config.userName}.
-You can read and send email, manage the calendar, send messages, keep tasks and reminders, and operate ${config.userName}'s Android phone and laptop through your tools.
+You can read and send email, manage the calendar, send messages, keep tasks and reminders, search the web, and operate ${config.userName}'s Android phone and laptop through your tools.
 
 Current date and time: ${nowString()}.
 Phone companion app: ${phoneConnected() ? 'connected' : 'NOT connected (phone tools will fail)'}.
@@ -27,6 +33,7 @@ Phone companion app: ${phoneConnected() ? 'connected' : 'NOT connected (phone to
 How you work:
 - Replies are spoken aloud. Keep them short: one to three plain sentences. No markdown, lists, emoji or URLs unless asked. Say times naturally ("quarter past three", "tomorrow at nine").
 - Act, don't interrogate. Use your tools to find what you need (contacts, calendar, email) and only ask a question when something essential is genuinely missing or ambiguous.
+- Use tools only through the function-calling interface. Never write a function call or JSON in your reply text.
 - Resolve names with contact_find, then phone_find_contact, before saying you cannot find someone.
 - Convert relative dates ("tomorrow", "next Friday") using the current date above. Pass times to tools as local ISO like 2026-10-28T15:00 unless you have an explicit offset.
 - When you write a message or email on ${config.userName}'s behalf, write it yourself in his voice: clear, polite, concise. Do not invent facts.
@@ -40,11 +47,11 @@ What you know about ${config.userName}:
 ${facts || '(nothing saved yet)'}`;
 }
 
-/** Drop old turns without ever splitting a tool_use / tool_result pair. */
+/** Drop old turns without ever splitting an assistant tool call from its tool results. */
 export function trimHistory(history, keep = 40) {
   if (history.length <= keep) return;
   let i = history.length - keep;
-  while (i < history.length && !(history[i].role === 'user' && typeof history[i].content === 'string')) i++;
+  while (i < history.length && history[i].role !== 'user') i++;
   if (i < history.length) history.splice(0, i);
 }
 
@@ -64,21 +71,14 @@ export async function runAgent({ history, text, send, client = getClient(), sour
 
   try {
     for (let step = 0; step < config.maxSteps; step++) {
-      const res = await client.messages.create({
-        model: config.model,
-        max_tokens: 1500,
-        system: buildSystem(),
-        tools: config.webSearch ? [...toolDefs, { type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] : toolDefs,
-        messages: history,
-      });
+      const res = await client.chat({ system: buildSystem(), messages: history, tools: apiTools });
+      const msg = res.message;
+      const calls = msg.tool_calls || [];
 
-      history.push({ role: 'assistant', content: res.content });
-      const spoken = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      const calls = res.content.filter((b) => b.type === 'tool_use');
+      history.push({ role: 'assistant', content: msg.content ?? null, ...(calls.length ? { tool_calls: calls } : {}) });
+      const spoken = String(msg.content || '').trim();
 
-      if (res.stop_reason === 'pause_turn') continue; // long server-side search: let it carry on
-
-      if (res.stop_reason !== 'tool_use' || calls.length === 0) {
+      if (!calls.length) {
         const final = spoken || 'Done.';
         send({ type: 'assistant', text: final, final: true, source });
         return final;
@@ -86,11 +86,9 @@ export async function runAgent({ history, text, send, client = getClient(), sour
 
       if (spoken) send({ type: 'assistant', text: spoken, final: false, source });
 
-      const results = [];
       for (const call of calls) {
-        results.push(await executeTool(call, send));
+        history.push(await executeTool(call, send));
       }
-      history.push({ role: 'user', content: results });
     }
 
     const stopped = 'I stopped because that took too many steps. Tell me how you would like to continue.';
@@ -98,17 +96,28 @@ export async function runAgent({ history, text, send, client = getClient(), sour
     send({ type: 'assistant', text: stopped, final: true, source });
     return stopped;
   } catch (err) {
-    // Roll back so a failed API call never leaves a dangling tool_use in the history.
+    // Roll back so a failed API call never leaves a dangling tool call in the history.
     history.splice(0, history.length, ...snapshot);
     throw err;
   }
 }
 
 async function executeTool(call, send) {
-  const { id, name, input } = call;
+  const id = call.id;
+  const name = call.function?.name;
+  const result = (content) => ({ role: 'tool', tool_call_id: id, content: String(content || 'OK') });
+  const fail = (msg) => result(`ERROR: ${msg}`);
+
   const tool = getTool(name);
-  const fail = (msg) => ({ type: 'tool_result', tool_use_id: id, content: msg, is_error: true });
   if (!tool) return fail(`Unknown tool "${name}".`);
+
+  let input;
+  try {
+    input = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+  } catch {
+    return fail('The tool arguments were not valid JSON. Call the tool again with valid arguments.');
+  }
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) input = {};
 
   if (needsConfirmation(tool, input)) {
     const summary = tool.summarize ? tool.summarize(input) : `${tool.label || name}`;
@@ -126,9 +135,9 @@ async function executeTool(call, send) {
 
   send({ type: 'status', text: tool.label || name });
   try {
-    const out = await tool.run(input || {}, { send });
-    return { type: 'tool_result', tool_use_id: id, content: clip(out ?? 'OK') };
+    const out = await tool.run(input, { send });
+    return result(clip(out ?? 'OK'));
   } catch (err) {
-    return fail(`Error: ${err.message}`);
+    return fail(err.message);
   }
 }

@@ -64,14 +64,13 @@ await test('trimHistory never splits tool pairs', () => {
   const h = [];
   for (let i = 0; i < 30; i++) {
     h.push({ role: 'user', content: `q${i}` });
-    h.push({ role: 'assistant', content: [{ type: 'tool_use', id: `t${i}`, name: 'x', input: {} }] });
-    h.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: `t${i}`, content: 'ok' }] });
-    h.push({ role: 'assistant', content: [{ type: 'text', text: 'done' }] });
+    h.push({ role: 'assistant', content: null, tool_calls: [{ id: `t${i}`, type: 'function', function: { name: 'x', arguments: '{}' } }] });
+    h.push({ role: 'tool', tool_call_id: `t${i}`, content: 'ok' });
+    h.push({ role: 'assistant', content: 'done' });
   }
   trimHistory(h, 40);
   assert.ok(h.length <= 40 && h.length > 30);
   assert.equal(h[0].role, 'user');
-  assert.equal(typeof h[0].content, 'string');
 });
 
 await test('tool safety rules', async () => {
@@ -101,20 +100,22 @@ await test('web_fetch refuses private and internal addresses', async () => {
 const fake = {
   script: [],
   seen: [],
-  messages: {
-    async create(req) {
-      fake.seen.push(JSON.parse(JSON.stringify(req)));
-      const next = fake.script.shift();
-      if (!next) throw new Error('fake model script exhausted');
-      return typeof next === 'function' ? next(req) : next;
-    },
+  async chat(req) {
+    fake.seen.push(JSON.parse(JSON.stringify(req)));
+    const next = fake.script.shift();
+    if (!next) throw new Error('fake model script exhausted');
+    return typeof next === 'function' ? next(req) : next;
   },
 };
-const toolUse = (name, input, id = 'tu_' + Math.random().toString(36).slice(2, 8)) => ({
-  stop_reason: 'tool_use',
-  content: [{ type: 'text', text: 'On it.' }, { type: 'tool_use', id, name, input }],
+const toolUse = (name, input, id = 'call_' + Math.random().toString(36).slice(2, 8)) => ({
+  finish_reason: 'tool_calls',
+  message: {
+    role: 'assistant',
+    content: 'On it.',
+    tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(input) } }],
+  },
 });
-const say = (text) => ({ stop_reason: 'end_turn', content: [{ type: 'text', text }] });
+const say = (text) => ({ finish_reason: 'stop', message: { role: 'assistant', content: text } });
 
 const jarvis = createServer({ client: fake });
 const port = await jarvis.listen(0, '127.0.0.1');
@@ -196,9 +197,9 @@ await test('risky tool waits for approval, then runs', async () => {
   assert.ok(!ui.msgs.some((m) => m.type === 'assistant' && m.final), 'must not finish before approval');
   send(ui, { type: 'confirm_response', id: c.id, approved: true });
   await waitFor(ui, (x) => x.type === 'assistant' && x.final);
-  const result = fake.seen.at(-1).messages.at(-1).content[0];
+  const result = fake.seen.at(-1).messages.at(-1);
   assert.match(result.content, /jarvis-ok/);
-  assert.ok(!result.is_error);
+  assert.ok(!result.content.startsWith('ERROR'));
 });
 
 await test('declined action is not executed and model is told', async () => {
@@ -210,8 +211,8 @@ await test('declined action is not executed and model is told', async () => {
   send(ui, { type: 'confirm_response', id: c.id, approved: false });
   await waitFor(ui, (x) => x.type === 'assistant' && x.final);
   assert.ok(!fs.existsSync(marker));
-  const result = fake.seen.at(-1).messages.at(-1).content[0];
-  assert.equal(result.is_error, true);
+  const result = fake.seen.at(-1).messages.at(-1);
+  assert.ok(result.content.startsWith('ERROR'));
   assert.match(result.content, /declined/);
 });
 
@@ -242,7 +243,7 @@ await test('risky tool with no screen connected is denied (HTTP path)', async ()
   });
   const body = await r.json();
   assert.equal(body.reply, 'Could not confirm.');
-  const result = fake.seen.at(-1).messages.at(-1).content[0];
+  const result = fake.seen.at(-1).messages.at(-1);
   assert.match(result.content, /No screen was available/);
 });
 
@@ -263,7 +264,7 @@ await test('phone bridge: command goes to phone and result returns', async () =>
   fake.script = [toolUse('phone_open_app', { name: 'WhatsApp' }), say('WhatsApp is open.')];
   send(ui2, { type: 'user', text: 'open whatsapp' });
   await waitFor(ui2, (x) => x.type === 'assistant' && x.final);
-  const result = fake.seen.at(-1).messages.at(-1).content[0];
+  const result = fake.seen.at(-1).messages.at(-1);
   assert.equal(result.content, 'Opened WhatsApp.');
 
   // sms: contact from the address book -> number goes to phone after confirmation
@@ -295,8 +296,8 @@ await test('phone tools fail cleanly when phone is offline', async () => {
   fake.script = [toolUse('phone_open_app', { name: 'Maps' }), say('The phone is not connected.')];
   send(ui2, { type: 'user', text: 'open maps' });
   await waitFor(ui2, (x) => x.type === 'assistant' && x.final);
-  const result = fake.seen.at(-1).messages.at(-1).content[0];
-  assert.equal(result.is_error, true);
+  const result = fake.seen.at(-1).messages.at(-1);
+  assert.ok(result.content.startsWith('ERROR'));
   assert.match(result.content, /not connected/);
 });
 
