@@ -110,6 +110,7 @@ export function createGeminiClient({ apiKey = process.env.GEMINI_API_KEY, fetchI
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           const msg = data?.error?.message || `Gemini error ${res.status}`;
+          console.error(`Gemini ${res.status} (${model}):`, JSON.stringify(data).slice(0, 800));
           const status = res.status === 400 && /api key/i.test(msg) ? 401 : res.status;
           throw Object.assign(new Error(msg), { status });
         }

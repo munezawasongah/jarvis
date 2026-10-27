@@ -22,7 +22,7 @@ export function friendlyError(err) {
       : 'The Anthropic API key is missing or invalid. Set ANTHROPIC_API_KEY on the server.';
   }
   if (err?.status === 429) return 'The AI service is rate limited right now. Try again in a moment.';
-  if (err?.status >= 500) return 'The AI service is having trouble. Try again shortly.';
+  if (err?.status >= 500) return `The AI service is having trouble (${err.status}): ${msg.slice(0, 300)}`;
   return msg || 'Something went wrong.';
 }
 
