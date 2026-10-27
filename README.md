@@ -21,14 +21,12 @@ as untrusted data, never as instructions.
 ```bash
 cd jarvis
 npm install
-cp .env.example .env      # add GEMINI_API_KEY (free) or ANTHROPIC_API_KEY
+cp .env.example .env      # add ANTHROPIC_API_KEY
 npm test                  # optional: 15 self tests, no API key needed
 npm start
 ```
 It prints the access token (also in `data/token.txt`). Open http://localhost:3000 on the same machine,
 tap Start, paste the token.
-
-**Which AI?** Set one API key and Jarvis uses it: `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `CEREBRAS_API_KEY` (all have free tiers) or `ANTHROPIC_API_KEY` (paid, best). With several keys set, choose with `JARVIS_PROVIDER`. Override the model with `JARVIS_MODEL`.
 
 ## 2. Reach it from your Fold 5
 
@@ -42,7 +40,14 @@ Pick one:
 On the Fold open the link in Chrome, sign in with the token, then menu > **Install app**. Unfolded, the same page uses the wide layout.
 Settings has speech language (try `sw-TZ` for Swahili), voice and speed. Say "Jarvis, ..." or tap the mic.
 
-## 3. Connect Gmail and Calendar (once)
+## 3. Connect Gmail and Calendar (once, from the browser)
+
+On a deployed server: create an OAuth client of type **Web application** with the redirect URI
+`https://YOUR-DOMAIN/auth/google/callback`, set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (and `PUBLIC_URL` if
+not on Railway), redeploy, then open Jarvis > Settings > **Connect Google**. Keep `JARVIS_DATA_DIR` on a volume.
+Publish the consent screen ("In production"), otherwise Google expires the login after 7 days.
+
+### Alternative: local script (Desktop-app client)
 
 1. console.cloud.google.com > new project > enable **Gmail API** and **Google Calendar API**.
 2. OAuth consent screen: External, add your own address as a test user.
@@ -82,6 +87,16 @@ have started the bot; save their chat id with "save Amina's telegram chat id 123
 ## Notes and limits
 
 - Speech recognition uses Chrome's built-in service (audio goes to Google). Wake word detection is "listen for the word in continuous transcription", so it needs the tab/app open and the screen on. A fully offline wake word (Porcupine) is a good next step.
+- Web: `web_search` uses Anthropic's server-side search (turn off with `WEB_SEARCH=0`); `web_fetch` reads a page and refuses private/internal addresses.
 - iPhone is not supported (Apple blocks this level of control).
 - `laptop_run` always asks first and shows the exact command. Never put it in `AUTO_APPROVE` on a server exposed to the internet.
 - The token is the key to everything. Keep it private; use HTTPS.
+
+## Deploy on Railway
+
+1. Push this repo to GitHub, then Railway > New Project > Deploy from GitHub repo.
+2. Variables: `ANTHROPIC_API_KEY`, `JARVIS_TOKEN` (a long random string), `TIMEZONE`, `USER_NAME`, `LAPTOP_TOOLS=0`,
+   `JARVIS_DATA_DIR=/data`, plus `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `TELEGRAM_BOT_TOKEN` if used.
+3. Add a Volume mounted at `/data` so memory, tasks and the Google login survive redeploys.
+4. Settings > Networking > Generate Domain. That HTTPS address is what you open on the Fold and enter in the Android app.
+5. Google login: run `npm run auth:google` locally, then put the resulting `data/google-token.json` into the volume.

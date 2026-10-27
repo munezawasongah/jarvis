@@ -17,14 +17,20 @@ export function googleReady() {
   return !!(config.google.clientId && config.google.clientSecret && fs.existsSync(tokenFile));
 }
 
-export function newOAuthClient() {
-  return new google.auth.OAuth2(config.google.clientId, config.google.clientSecret, REDIRECT_URI);
+export function newOAuthClient(redirectUri = REDIRECT_URI) {
+  return new google.auth.OAuth2(config.google.clientId, config.google.clientSecret, redirectUri);
 }
 
 let cached;
+
+/** Persist tokens from a completed sign-in and drop the cached client so the next call uses them. */
+export function saveTokens(tokens) {
+  fs.writeFileSync(tokenFile, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+  cached = undefined;
+}
 export function getAuth() {
   if (!googleReady()) {
-    throw new Error('Google is not connected yet. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then run "npm run auth:google" on the server.');
+    throw new Error('Google is not connected yet. Open Jarvis settings and tap Connect Google (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set on the server).');
   }
   if (cached) return cached;
   const auth = newOAuthClient();

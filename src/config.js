@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { pickProvider } from './providers.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = process.env.JARVIS_DATA_DIR || path.join(root, 'data');
@@ -20,7 +19,6 @@ function loadToken() {
   return token;
 }
 
-const provider = pickProvider();
 const list = (v) => (v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 export const config = {
@@ -29,11 +27,7 @@ export const config = {
   publicDir: path.join(root, 'public'),
   port: Number(process.env.PORT || 3000),
   token: loadToken(),
-  // Which AI brain: see providers.js. Set JARVIS_PROVIDER, or it picks whichever API key you set.
-  provider: provider.name,
-  keyEnv: provider.keyEnv,
-  baseUrl: provider.baseUrl,
-  model: provider.model,
+  model: process.env.JARVIS_MODEL || 'claude-sonnet-5-5',
   userName: process.env.USER_NAME || 'Diego',
   tz: process.env.TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
   maxSteps: Number(process.env.MAX_STEPS || 12),
@@ -46,6 +40,10 @@ export const config = {
     clientId: process.env.GOOGLE_CLIENT_ID || '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   },
+  // Public HTTPS address of this server (used for the Google sign-in redirect). Railway sets RAILWAY_PUBLIC_DOMAIN.
+  publicUrl: (process.env.PUBLIC_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '')).replace(/\/+$/, ''),
+  // Anthropic's server-side web search (set WEB_SEARCH=0 to turn off).
+  webSearch: process.env.WEB_SEARCH !== '0',
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   // Laptop tools run on whichever machine runs this server. Set to 0 to disable them.
   laptopEnabled: process.env.LAPTOP_TOOLS !== '0',

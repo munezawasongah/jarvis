@@ -448,6 +448,8 @@ $('#wakeChk').addEventListener('change', (e) => setWake(e.target.checked));
 $('#speakChk').addEventListener('change', (e) => { S.speakReplies = e.target.checked; store.set('speak', S.speakReplies); if (!S.speakReplies) stopSpeaking(); });
 $('#clearBtn').addEventListener('click', () => { sendWs({ type: 'reset' }); log.replaceChildren(); });
 
+$('#googleBtn').addEventListener('click', () => { window.open(`/auth/google?token=${encodeURIComponent(S.token)}`, '_blank'); });
+
 const tokenDlg = $('#tokenDlg');
 function openTokenDialog() {
   $('#tokenInput').value = '';

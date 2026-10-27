@@ -6,8 +6,9 @@ import calendar from './calendar.js';
 import messaging from './messaging.js';
 import phone from './phone.js';
 import laptop from './laptop.js';
+import web from './web.js';
 
-export const tools = [...memory, ...tasks, ...email, ...calendar, ...messaging, ...phone, ...laptop];
+export const tools = [...memory, ...tasks, ...email, ...calendar, ...messaging, ...phone, ...laptop, ...web];
 
 const byName = new Map();
 for (const t of tools) {
