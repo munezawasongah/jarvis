@@ -1,0 +1,5 @@
+.venv
+voices
+settings.json
+*.log
+__pycache__

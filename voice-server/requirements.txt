@@ -1,0 +1,4 @@
+# Jarvis voice worker. CPU only; on Windows and macOS PyPI already serves the small CPU build of PyTorch.
+pocket-tts==4.0.1
+websockets>=14,<17
+huggingface_hub>=0.34

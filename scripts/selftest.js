@@ -15,6 +15,7 @@ process.env.USER_NAME = 'Tester';
 process.env.GOOGLE_CLIENT_ID = 'test-client-id';
 process.env.GOOGLE_CLIENT_SECRET = 'test-secret';
 process.env.PUBLIC_URL = 'https://jarvis.example.com';
+process.env.VOICE_LIST_REFRESH = '0'; // no network in tests
 
 const { createServer } = await import('../src/app.js');
 const { tools, toolDefs } = await import('../src/tools/index.js');
@@ -319,6 +320,102 @@ await test('remember() feeds the next system prompt', async () => {
   send(ui2, { type: 'user', text: 'what do you know' });
   await waitFor(ui2, (x) => x.type === 'assistant' && x.final && x.text === 'ok');
   assert.match(fake.seen.at(-1).system, /meeting preference: after 10am/);
+});
+
+// ---------- voice ----------
+const http = `http://127.0.0.1:${port}`;
+const makeWav = (seconds, rate = 24000) => {
+  const n = Math.round(seconds * rate);
+  const b = Buffer.alloc(44 + n * 2);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVE', 8); b.write('fmt ', 12);
+  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(rate, 24);
+  b.writeUInt32LE(rate * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / 9) * 6000), 44 + i * 2);
+  return b;
+};
+const tts = (body, token = 'testtoken') => fetch(`${http}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+
+await test('voice: auth, validation, and clean 503 when the voice worker is offline', async () => {
+  assert.equal((await tts({ text: 'hi', engine: 'mine' }, 'wrong')).status, 401);
+  assert.equal((await tts({ text: '   ', engine: 'mine' })).status, 400);
+  assert.equal((await tts({ text: 'hi', engine: 'robot' })).status, 400);
+  assert.equal((await tts({ text: 'x'.repeat(1300), engine: 'neural' })).status, 413);
+  assert.equal((await tts({ text: 'hi', engine: 'neural', voice: '<bad>' })).status, 400);
+  const r = await tts({ text: 'hi', engine: 'mine' });
+  assert.equal(r.status, 503);
+  assert.match((await r.json()).error, /not running/);
+  const info = await (await fetch(`${http}/api/voice?lang=sw-KE`, { headers: { Authorization: 'Bearer testtoken' } })).json();
+  assert.equal(info.mine.connected, false);
+  assert.equal(info.neural.default, 'sw-KE-RafikiNeural');
+  assert.ok(info.neural.voices.some((v) => v.id === 'en-GB-RyanNeural'));
+});
+
+await test('voice: worker joins, Jarvis adopts its sample, speaks, caches, and pushes new samples', async () => {
+  const worker = await connect('/voice');
+  const sample = makeWav(8);
+  let ttsCalls = 0;
+  const gotSetVoice = [];
+  worker.on('message', (raw) => {
+    const m = JSON.parse(raw);
+    if (m.type === 'get_voice') send(worker, { type: 'voice_sample', sha: 'w1', wav_b64: sample.toString('base64') });
+    if (m.type === 'tts') { ttsCalls++; send(worker, { type: 'audio', id: m.id, ok: true, wav_b64: makeWav(0.5).toString('base64') }); }
+    if (m.type === 'set_voice') gotSetVoice.push(m);
+  });
+  send(worker, { type: 'hello', engine: 'pocket-tts', device: 'LAPTOP', ready: true, busy: false, cloning: true, languages: ['en'], sampleSha: 'w1', error: '' });
+  const st = await waitFor(ui2, (m) => m.type === 'voice' && m.ready === true && m.device === 'LAPTOP');
+  assert.equal(st.connected, true);
+  // Jarvis had no sample, so it asked for the worker's one and stored it
+  for (let i = 0; i < 40 && !fs.existsSync(path.join(tmp, 'voice', 'sample.wav')); i++) await new Promise((r) => setTimeout(r, 25));
+  assert.ok(fs.existsSync(path.join(tmp, 'voice', 'sample.wav')), 'sample adopted');
+
+  const r1 = await tts({ text: 'Good evening, Evans.', engine: 'mine' });
+  assert.equal(r1.status, 200);
+  assert.equal(r1.headers.get('content-type'), 'audio/wav');
+  assert.equal(r1.headers.get('x-voice-cached'), '0');
+  const a1 = Buffer.from(await r1.arrayBuffer());
+  assert.equal(a1.toString('ascii', 0, 4), 'RIFF');
+  const r2 = await tts({ text: 'Good  evening, Evans. ', engine: 'mine' });
+  assert.equal(r2.headers.get('x-voice-cached'), '1');
+  assert.equal(ttsCalls, 1, 'second identical sentence served from cache');
+
+  // A new sample recorded in the app is stored and taught to the worker
+  const bad = await fetch(`${http}/api/voice/sample`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', Authorization: 'Bearer testtoken' }, body: Buffer.from('not audio at all, definitely not a wav file header') });
+  assert.equal(bad.status, 400);
+  const short = await fetch(`${http}/api/voice/sample`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', Authorization: 'Bearer testtoken' }, body: makeWav(2) });
+  assert.equal(short.status, 400);
+  const fresh = makeWav(12, 16000);
+  const up = await fetch(`${http}/api/voice/sample`, { method: 'POST', headers: { 'Content-Type': 'audio/wav', Authorization: 'Bearer testtoken' }, body: fresh });
+  assert.equal(up.status, 200);
+  const upj = await up.json();
+  assert.equal(upj.mine.busy, true);
+  for (let i = 0; i < 40 && !gotSetVoice.length; i++) await new Promise((r) => setTimeout(r, 25));
+  assert.equal(gotSetVoice.length, 1);
+  assert.ok(Buffer.from(gotSetVoice[0].wav_b64, 'base64').equals(fresh));
+  // while learning, "mine" is not used (and the cache key changed with the sample)
+  assert.equal((await tts({ text: 'Good evening, Evans.', engine: 'mine' })).status, 503);
+  send(worker, { type: 'status', ready: true, busy: false, sampleSha: gotSetVoice[0].sha, error: '' });
+  await waitFor(ui2, (m) => m.type === 'voice' && m.ready === true && m.busy === false);
+  const r3 = await tts({ text: 'Good evening, Evans.', engine: 'mine' });
+  assert.equal(r3.headers.get('x-voice-cached'), '0');
+  assert.equal(ttsCalls, 2);
+
+  // A worker error is reported, not hung
+  worker.removeAllListeners('message');
+  worker.on('message', (raw) => { const m = JSON.parse(raw); if (m.type === 'tts') send(worker, { type: 'audio', id: m.id, ok: false, error: 'model crashed' }); });
+  const r4 = await tts({ text: 'Something new.', engine: 'mine' });
+  assert.equal(r4.status, 502);
+  assert.match((await r4.json()).error, /model crashed/);
+
+  // A restarted worker with an old sample is sent the current one
+  worker.close();
+  await waitFor(ui2, (m) => m.type === 'voice' && m.connected === false);
+  const w2 = await connect('/voice');
+  const pushed = new Promise((resolve) => w2.on('message', (raw) => { const m = JSON.parse(raw); if (m.type === 'set_voice') resolve(m); }));
+  send(w2, { type: 'hello', ready: true, cloning: true, languages: ['en'], sampleSha: 'something-old' });
+  const m = await pushed;
+  assert.ok(Buffer.from(m.wav_b64, 'base64').equals(fresh));
+  w2.close();
+  await waitFor(ui2, (x) => x.type === 'voice' && x.connected === false);
 });
 
 ui2.close();

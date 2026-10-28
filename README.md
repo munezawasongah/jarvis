@@ -74,6 +74,54 @@ numbers and the English "Send" label). Phone calls and SMS go through your norma
 Create a bot with @BotFather, put the token in `.env`. Telegram only lets bots message people who
 have started the bot; save their chat id with "save Amina's telegram chat id 123456".
 
+## 6. Jarvis' voice (your own voice, free, offline and online)
+
+Settings > **Jarvis' voice** has three engines. Automatic tries them in this order for each sentence:
+
+| Engine | What it is | Needs |
+|---|---|---|
+| **My voice** | Your own voice, cloned from a recording by [Kyutai Pocket TTS](https://github.com/kyutai-labs/pocket-tts) on your laptop's CPU. Nothing leaves your machine. | The voice worker running on the laptop (below). English. |
+| **Online voice** | Microsoft neural voices (British Ryan, Kenyan Chilemba, Kiswahili Rafiki/Daudi, ...), free, no key. | Internet on the Jarvis server. |
+| **Phone voice** | The phone's built-in voice. | Nothing; works offline. |
+
+The chip in the top bar shows which voice is speaking. Speed applies to all three. Kiswahili (`sw-KE`/`sw-TZ`)
+automatically uses the online Kiswahili voices, because the cloned voice speaks English.
+
+### Set up your voice on the laptop (once)
+
+```powershell
+cd jarvis\voice-server
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+It installs Python if needed and Pocket TTS (~700 MB in total), then asks for a free Hugging Face **Read** token: Kyutai
+asks you to accept their terms at huggingface.co/kyutai/pocket-tts before voice cloning works (the script opens the pages).
+It then learns your voice from `voices\my-voice.wav` and plays a test sentence in it.
+
+### Connect it to Jarvis
+
+```powershell
+# Jarvis running on this laptop:
+powershell -ExecutionPolicy Bypass -File start.ps1
+# Jarvis on Railway (remembered, so next time just start.ps1):
+powershell -ExecutionPolicy Bypass -File start.ps1 -Server https://YOUR-APP.up.railway.app -Token YOUR_JARVIS_TOKEN
+# Start it hidden every time you sign in to Windows:
+powershell -ExecutionPolicy Bypass -File start.ps1 -Autostart
+```
+The worker dials out to Jarvis (like the phone app), so no tunnel or open port is needed, even with Jarvis in the cloud.
+When it's off, Jarvis just uses the online voice.
+
+### Change your voice sample
+
+Settings > **Record my voice** (reads a short script, 30-60 s) or **Upload a sample** (any WAV/MP3/M4A). The sample is
+kept in Jarvis' data folder, sent to the worker, and learnt in about a minute. Tips: quiet room, no fan or TV, phone a
+hand's width from your mouth, normal pace. The sample's quality (noise, echo) is copied into the voice.
+
+Your voice files are git-ignored (`voice-server/voices/`): anyone with the sample could clone your voice, so keep them
+off GitHub. Only clone voices of people who have agreed to it.
+
+Optional: `voice-server/Dockerfile` runs the worker in the cloud instead (needs ~1.5 GB RAM, `HF_TOKEN`, `JARVIS_URL`,
+`JARVIS_TOKEN`); Jarvis sends it your sample automatically.
+
 ## Things to say
 
 - "Jarvis, what's on today?" / "Any important email?"
@@ -86,6 +134,7 @@ have started the bot; save their chat id with "save Amina's telegram chat id 123
 
 ## Notes and limits
 
+- Jarvis' brain (Groq) needs internet; without it Jarvis can't answer, but whatever it says still plays in your voice or the phone voice.
 - Speech recognition uses Chrome's built-in service (audio goes to Google). Wake word detection is "listen for the word in continuous transcription", so it needs the tab/app open and the screen on. A fully offline wake word (Porcupine) is a good next step.
 - Web: `web_search` uses Tavily if `TAVILY_API_KEY` is set (recommended), otherwise a free scraper that datacenter IPs may get blocked on; `web_fetch` reads a page and refuses private/internal addresses.
 - Groq free plans have per-minute token limits; Jarvis waits and retries on rate limits, but heavy multi-step requests can still be slow.

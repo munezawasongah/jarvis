@@ -1,0 +1,9 @@
+# Your voice never goes to GitHub: anyone with the sample could clone it.
+voices/*.wav
+voices/*.safetensors
+voices/*.sha
+voices/*.tmp
+settings.json
+.venv/
+*.log
+__pycache__/

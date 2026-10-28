@@ -10,6 +10,8 @@ import { attachPhone, onPhoneChange, phoneConnected } from './phoneBridge.js';
 import { googleReady, newOAuthClient, saveTokens, SCOPES } from './google.js';
 import { startScheduler } from './scheduler.js';
 import { tools } from './tools/index.js';
+import { attachVoiceWorker, onVoiceChange, setVoiceSample, voiceStatus } from './voiceBridge.js';
+import { synthesize, neuralVoices, defaultNeuralVoice } from './voice.js';
 
 const digest = (s) => crypto.createHash('sha256').update(String(s ?? '')).digest();
 const tokenOk = (t) => crypto.timingSafeEqual(digest(t), digest(config.token));
@@ -38,7 +40,7 @@ export function createServer({ client } = {}) {
   };
 
   app.get('/health', (req, res) => {
-    res.json({ ok: true, phone: phoneConnected(), google: googleReady(), tools: tools.length });
+    res.json({ ok: true, phone: phoneConnected(), google: googleReady(), voice: voiceStatus().ready, tools: tools.length });
   });
 
   // Plain HTTP entry point (handy for testing and automations). Confirmations still go to connected screens.
@@ -50,6 +52,41 @@ export function createServer({ client } = {}) {
       res.json({ reply });
     } catch (err) {
       res.status(500).json({ error: friendlyError(err) });
+    }
+  });
+
+  // ---- Voice: your cloned voice (laptop worker), free online neural voices, and voice samples ----
+  app.get('/api/voice', auth, (req, res) => {
+    const lang = typeof req.query.lang === 'string' ? req.query.lang : 'en-GB';
+    res.json({ mine: voiceStatus(), neural: { voices: neuralVoices(), default: defaultNeuralVoice(lang) } });
+  });
+
+  app.post('/api/tts', auth, async (req, res) => {
+    const { text, engine, voice, lang } = req.body || {};
+    try {
+      const out = await synthesize({
+        text: typeof text === 'string' ? text : '',
+        engine,
+        voice: typeof voice === 'string' && voice ? voice : undefined,
+        lang: typeof lang === 'string' ? lang : undefined,
+      });
+      res.set({
+        'Content-Type': out.mime,
+        'Cache-Control': 'private, no-store',
+        'X-Voice-Engine': out.engine,
+        'X-Voice-Cached': out.cached ? '1' : '0',
+      });
+      res.send(out.audio);
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message || 'Could not make speech.' });
+    }
+  });
+
+  app.post('/api/voice/sample', auth, express.raw({ type: () => true, limit: '30mb' }), (req, res) => {
+    try {
+      res.json({ ok: true, mine: setVoiceSample(req.body) });
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message });
     }
   });
 
@@ -92,6 +129,8 @@ export function createServer({ client } = {}) {
 
   const server = http.createServer(app);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+  // The voice worker sends audio and voice samples, so it gets a bigger message limit.
+  const voiceWss = new WebSocketServer({ noServer: true, maxPayload: 48 * 1024 * 1024 });
 
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url, 'http://localhost');
@@ -106,12 +145,13 @@ export function createServer({ client } = {}) {
     };
     if (url.pathname === '/ws') wss.handleUpgrade(req, socket, head, accept(onClient));
     else if (url.pathname === '/phone') wss.handleUpgrade(req, socket, head, accept(attachPhone));
+    else if (url.pathname === '/voice') voiceWss.handleUpgrade(req, socket, head, accept(attachVoiceWorker));
     else socket.destroy();
   });
 
   function onClient(ws) {
     clients.add(ws);
-    ws.send(JSON.stringify({ type: 'hello', name: config.userName, phone: phoneConnected(), google: googleReady() }));
+    ws.send(JSON.stringify({ type: 'hello', name: config.userName, phone: phoneConnected(), google: googleReady(), voice: voiceStatus() }));
     for (const m of pendingConfirmations()) ws.send(JSON.stringify(m));
 
     ws.on('message', (raw) => {
@@ -136,7 +176,7 @@ export function createServer({ client } = {}) {
 
   // Keep connections alive through proxies and drop dead ones.
   const heartbeat = setInterval(() => {
-    for (const ws of wss.clients) {
+    for (const ws of [...wss.clients, ...voiceWss.clients]) {
       if (ws.isAlive === false) { ws.terminate(); continue; }
       ws.isAlive = false;
       try { ws.ping(); } catch { /* ignore */ }
@@ -145,6 +185,7 @@ export function createServer({ client } = {}) {
   heartbeat.unref?.();
 
   onPhoneChange((connected) => broadcast({ type: 'phone', connected }));
+  const offVoice = onVoiceChange((s) => broadcast({ type: 'voice', ...s }));
 
   let stopScheduler = () => {};
   return {
@@ -162,7 +203,8 @@ export function createServer({ client } = {}) {
     close() {
       stopScheduler();
       clearInterval(heartbeat);
-      for (const ws of wss.clients) ws.terminate();
+      offVoice();
+      for (const ws of [...wss.clients, ...voiceWss.clients]) ws.terminate();
       return new Promise((resolve) => server.close(resolve));
     },
   };

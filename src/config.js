@@ -51,4 +51,12 @@ export const config = {
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   // Laptop tools run on whichever machine runs this server. Set to 0 to disable them.
   laptopEnabled: process.env.LAPTOP_TOOLS !== '0',
+  voice: {
+    // Default online (Microsoft Edge neural) voice. Empty = pick one that matches the speech language.
+    neuralVoice: process.env.NEURAL_VOICE || '',
+    // Spoken sentences are cached on disk so repeated phrases play instantly.
+    cacheMb: Number(process.env.VOICE_CACHE_MB || 80),
+    // Fetch the full list of Microsoft voices for the settings menu (0 = only the built-in short list).
+    listRefresh: process.env.VOICE_LIST_REFRESH !== '0',
+  },
 };

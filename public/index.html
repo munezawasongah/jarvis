@@ -27,6 +27,7 @@
     <div class="chips">
       <span class="chip" id="connChip" title="Server connection"><i class="dot"></i>Server</span>
       <span class="chip" id="phoneChip" title="Android companion app"><i class="dot"></i>Phone</span>
+      <span class="chip" id="voiceChip" title="Which voice Jarvis speaks with"><i class="dot"></i>Voice</span>
     </div>
     <div class="actions">
       <button id="wakeBtn" class="icon" aria-pressed="true" title="Always listening for “Jarvis”">Wake</button>
@@ -72,9 +73,31 @@
         <input id="lang" list="langs" placeholder="en-US">
         <datalist id="langs"><option value="en-US"><option value="en-GB"><option value="sw-TZ"><option value="sw-KE"><option value="fr-FR"><option value="es-ES"><option value="de-DE"></datalist>
       </label>
-      <label>Voice
-        <select id="voice"></select>
-      </label>
+      <fieldset class="voicebox">
+        <legend>Jarvis’ voice</legend>
+        <label>Voice engine
+          <select id="engine">
+            <option value="auto">Automatic (best one available)</option>
+            <option value="mine">My voice (cloned, on my laptop)</option>
+            <option value="neural">Online neural voice (free)</option>
+            <option value="device">Phone’s built-in voice (offline)</option>
+          </select>
+        </label>
+        <p class="muted small">Automatic uses your own voice when the laptop worker is on, the free online voice when it isn’t, and the phone’s voice when there’s no connection.</p>
+        <div id="mineStatus" class="voice-status off" role="status"></div>
+        <div class="row">
+          <button type="button" id="recordBtn">Record my voice</button>
+          <button type="button" id="uploadBtn">Upload a sample</button>
+          <button type="button" id="testVoiceBtn">Test voice</button>
+          <input type="file" id="sampleFile" accept="audio/*,.m4a,.wav,.mp3" hidden>
+        </div>
+        <label id="neuralRow">Online voice
+          <select id="neuralVoice"></select>
+        </label>
+        <label id="deviceRow">Phone voice (used when nothing else is reachable)
+          <select id="voice"></select>
+        </label>
+      </fieldset>
       <label>Speed <output id="rateOut"></output>
         <input id="rate" type="range" min="0.7" max="1.5" step="0.05">
       </label>
@@ -96,6 +119,20 @@
       <p class="muted">Paste the token from your Jarvis server (JARVIS_TOKEN or data/token.txt).</p>
       <input id="tokenInput" type="password" autocomplete="off" placeholder="Access token" required>
       <div class="row"><button value="save" class="primary">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="recDlg">
+    <form method="dialog" class="settings" id="recForm">
+      <h2>Record my voice</h2>
+      <p class="muted">Find a quiet room, hold the phone about a hand’s width from your mouth and read this out in your normal voice. 30 to 60 seconds is perfect.</p>
+      <blockquote id="recScript" class="script"></blockquote>
+      <div class="rec-meter" aria-hidden="true"><i id="recLevel"></i></div>
+      <div id="recTime" class="rec-time">0:00</div>
+      <div class="row">
+        <button type="button" id="recCancel">Cancel</button>
+        <button type="button" id="recGo" class="primary">Start recording</button>
+      </div>
     </form>
   </dialog>
 

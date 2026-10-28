@@ -115,3 +115,19 @@ dialog::backdrop { background: #02050acc; }
 .muted { color: var(--muted); margin: 0; font-size: 14px; }
 
 .toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 40; background: #1a2333; border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px; font-size: 14px; max-width: 90vw; text-align: center; box-shadow: 0 8px 30px #000a; }
+
+/* Voice settings */
+.voicebox { border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.voicebox legend { color: var(--text); font-size: 14px; padding: 0 6px; }
+.voice-status { font-size: 13px; line-height: 1.4; padding: 8px 10px; border-radius: 10px; background: #0a111c; border: 1px solid var(--line); color: var(--muted); }
+.voice-status.ok { color: var(--green); border-color: #3ddc9755; }
+.voice-status.busy { color: var(--amber); border-color: #ffb34755; }
+dialog { max-height: 92vh; overflow-y: auto; }
+.script { margin: 0; padding: 12px 14px; background: #0a111c; border-left: 3px solid var(--accent); border-radius: 8px; font-size: 16px; line-height: 1.55; color: var(--text); }
+.rec-meter { height: 8px; border-radius: 99px; background: #0a111c; border: 1px solid var(--line); overflow: hidden; }
+.rec-meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--green), var(--amber)); transition: width .08s linear; }
+.rec-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+.chip { white-space: nowrap; }
+.chips { min-width: 0; flex-wrap: wrap; }
+@media (max-width: 440px) { header { gap: 8px; padding: 10px 12px; } .chips { gap: 5px; } .chip { padding: 2px 7px; font-size: 11px; } .icon { padding: 6px 9px; } }
+.muted.small { font-size: 12.5px; line-height: 1.45; }
